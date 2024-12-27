@@ -1,0 +1,17 @@
+{
+    "version": 2,
+    "builds": [
+      {
+        "src": "package.json",
+        "use": "@vercel/next"
+      }
+    ],
+    "build": {
+      "commands": [
+        "npm install",
+        "prisma generate",
+        "npm run build"
+      ]
+    }
+  }
+  
