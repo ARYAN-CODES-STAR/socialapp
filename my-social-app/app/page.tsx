@@ -190,7 +190,7 @@ export default function MagicalLandingPage() {
         }}
       />
 
-      <header className="fixed w-full z-50 bg-black bg-opacity-50 backdrop-blur-md">
+      {/* <header className="fixed w-full z-50 bg-black bg-opacity-50 backdrop-blur-md">
         <nav className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <MagicText>
@@ -205,7 +205,7 @@ export default function MagicalLandingPage() {
             </div>
           </div>
         </nav>
-      </header>
+      </header> */}
 
       <main className="pt-24">
         <section className="container mx-auto px-6 py-24 text-center">
