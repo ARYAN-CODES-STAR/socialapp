@@ -1,128 +1,115 @@
-// import { redirect } from 'next/navigation'
-// import { createClient } from '../utils/supabase/server'
+'use client'
 
-// export default async function Profile() {
-//   const supabase = createClient()
-//   const { data: { session } } = await supabase.auth.getSession()
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '../utils/supabase/client'
 
-//   if (!session) {
-//     redirect('/auth/signin')
-//   }
+interface Post {
+  id: string
+  content: string
+  imageUrl: string | null
+  createdAt: string
+}
 
-//   const user = session.user
+interface User {
+  id: string
+  email: string
+  name: string | null
+}
 
-//   return (
-//     <div className="max-w-2xl mx-auto p-4">
-//       <div className="bg-white rounded-lg shadow p-6">
-//         <div className="flex items-center space-x-4">
-//           {user.user_metadata.avatar_url && (
-//             <img
-//               src={user.user_metadata.avatar_url}
-//               alt="Profile"
-//               className="w-16 h-16 rounded-full"
-//             />
-//           )}
-//           <div>
-//             <h1 className="text-2xl font-bold">
-//               {user.user_metadata.full_name || 'User'}
-//             </h1>
-//             <p className="text-gray-600">{user.email}</p>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   )
-// }
+export default function ProfilePage() {
+  const [user, setUser] = useState<User | null>(null)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const supabase = createClient()
 
-import React from "react";
-import { redirect } from "next/navigation";
-import { createClient } from "../utils/supabase/server";
-import { FiEdit2, FiMapPin, FiCalendar, FiLink } from "react-icons/fi";
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      setLoading(true)
+      try {
+        const { data: user, error: userError } = await supabase.auth.getUser()
+        if (userError) throw new Error(userError.message)
 
-export default async function Profile() {
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+        const { data: posts, error: postsError } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('author_id', user.user?.id)
+          .order('created_at', { ascending: false })
 
-  if (!session) {
-    redirect("/auth/signin");
-  }
+        if (postsError) throw new Error(postsError.message)
 
-  const user = session.user;
+        setUser({
+          id: user.user?.id || '',
+          email: user.user?.email || '',
+          name: user.user?.user_metadata?.name || null,
+        })
+        setPosts(posts)
+      } catch (err) {
+        console.error(err)
+        setError('Failed to load profile')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUserProfile()
+  }, [])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div>{error}</div>
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 text-gray-800">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="relative h-48 rounded-t-xl bg-gradient-to-r from-blue-500 to-purple-600 mb-16">
-          <div className="absolute -bottom-16 left-8">
-            <div className="relative">
-              <img
-                src={
-                  user.user_metadata.avatar_url || "/api/placeholder/150/150"
-                }
-                alt="Profile"
-                className="w-32 h-32 rounded-full border-4 border-white bg-white object-cover"
-              />
-              <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg hover:bg-gray-50">
-                <FiEdit2 size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-300 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden">
+        <div className="p-8">
+          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-600 mb-6">Profile</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-2xl font-bold">
-                    {user.user_metadata.full_name || "User"}
-                  </h1>
-                  <p className="text-gray-600">{user.email}</p>
+          {user ? (
+            <div className="mb-10">
+              <div className="text-lg font-semibold text-gray-800">
+                {user.name || 'Anonymous User'}
+              </div>
+              <div className="text-sm text-gray-600">{user.email}</div>
+            </div>
+          ) : (
+            <div className="text-gray-600">User not found</div>
+          )}
+
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Your Posts</h2>
+            {posts.length === 0 ? (
+              <div className="text-gray-600">No posts found.</div>
+            ) : (
+              posts.map((post) => (
+                <div
+                  key={post.id}
+                  className="bg-gradient-to-r from-blue-50 to-green-50 p-6 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg mb-6"
+                >
+                  <p className="text-gray-700 mb-4 text-lg">{post.content}</p>
+                  {post.imageUrl && (
+                    <img
+                      src={post.imageUrl}
+                      alt="Post image"
+                      className="w-full h-64 object-cover rounded-lg"
+                    />
+                  )}
+                  <div className="text-sm text-gray-500 mt-4">
+                    {new Date(post.createdAt).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
                 </div>
-
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <FiMapPin size={16} />
-                    <span>Location</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <FiCalendar size={16} />
-                    <span>Joined {new Date().toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <FiLink size={16} />
-                    <span>website.com</span>
-                  </div>
-                </div>
-
-                <p className="text-gray-700">
-                  Bio placeholder text. Click edit to add your bio.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="font-semibold mb-4">Stats & Activity</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Posts</span>
-                <span className="font-medium">24</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Following</span>
-                <span className="font-medium">108</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Followers</span>
-                <span className="font-medium">256</span>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
