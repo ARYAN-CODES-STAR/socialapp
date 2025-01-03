@@ -9,11 +9,56 @@ const postSchema = z.object({
   imageUrl: z.string().nullable(),
 })
 
+export async function GET() {
+  try {
+    const posts = await prisma.post.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            email: true,
+            name: true
+          }
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                name: true,
+                email: true
+              }
+            },
+            replies: {
+              include: {
+                author: {
+                  select: {
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+    return NextResponse.json(posts)
+  } catch (error) {
+    console.error('Error in GET /api/posts:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch posts' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
-
     if (!session) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
@@ -41,6 +86,15 @@ export async function POST(request: Request) {
         imageUrl: body.imageUrl,
         authorId: session.user.id,
       },
+      include: {
+        author: {
+          select: {
+            email: true,
+            name: true
+          }
+        },
+        comments: true
+      }
     })
     
     return NextResponse.json(post)
@@ -48,32 +102,6 @@ export async function POST(request: Request) {
     console.error('Error in POST /api/posts:', error)
     return NextResponse.json(
       { error: error.message || 'Internal Server Error' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function GET() {
-  try {
-    const posts = await prisma.post.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      },
-      include: {
-        author: {
-          select: {
-            email: true,
-            name: true
-          }
-        }
-      }
-    })
-
-    return NextResponse.json(posts)
-  } catch (error) {
-    console.error('Error in GET /api/posts:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch posts' },
       { status: 500 }
     )
   }

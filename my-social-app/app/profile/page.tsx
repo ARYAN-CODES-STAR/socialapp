@@ -3,111 +3,126 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../utils/supabase/client'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import Image from 'next/image'
 
 interface Post {
   id: string
   content: string
   imageUrl: string | null
   createdAt: string
+  comments: Comment[]
 }
 
 interface User {
   id: string
   email: string
   name: string | null
+  followers: Follow[]
+  following: Follow[]
+}
+
+interface Follow {
+  id: string
+  follower: User
+  following: User
+}
+
+interface Comment {
+  id: string
+  content: string
+  author: {
+    name: string | null
+    email: string
+  }
 }
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   const router = useRouter()
   const supabase = createClient()
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      setLoading(true)
-      try {
-        const { data: user, error: userError } = await supabase.auth.getUser()
-        if (userError) throw new Error(userError.message)
-
-        const { data: posts, error: postsError } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('author_id', user.user?.id)
-          .order('created_at', { ascending: false })
-
-        if (postsError) throw new Error(postsError.message)
-
-        setUser({
-          id: user.user?.id || '',
-          email: user.user?.email || '',
-          name: user.user?.user_metadata?.name || null,
-        })
-        setPosts(posts)
-      } catch (err) {
-        console.error(err)
-        setError('Failed to load profile')
-      } finally {
-        setLoading(false)
-      }
+  
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      
+      const response = await fetch(`/api/users/${user?.id}`)
+      if (!response.ok) throw new Error('Failed to fetch profile')
+      return response.json()
     }
+  })
 
-    fetchUserProfile()
-  }, [])
+  const { data: posts, isLoading: postsLoading } = useQuery({
+    queryKey: ['userPosts', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return []
+      const response = await fetch(`/api/users/${profile.id}/posts`)
+      if (!response.ok) throw new Error('Failed to fetch posts')
+      return response.json()
+    },
+    enabled: !!profile?.id
+  })
 
-  if (loading) return <div>Loading...</div>
-  if (error) return <div>{error}</div>
+  if (profileLoading || postsLoading) return <div>Loading...</div>
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-300 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden">
         <div className="p-8">
-          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-600 mb-6">Profile</h1>
-
-          {user ? (
-            <div className="mb-10">
-              <div className="text-lg font-semibold text-gray-800">
-                {user.name || 'Anonymous User'}
-              </div>
-              <div className="text-sm text-gray-600">{user.email}</div>
-            </div>
-          ) : (
-            <div className="text-gray-600">User not found</div>
-          )}
-
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Your Posts</h2>
-            {posts.length === 0 ? (
-              <div className="text-gray-600">No posts found.</div>
-            ) : (
-              posts.map((post) => (
-                <div
-                  key={post.id}
-                  className="bg-gradient-to-r from-blue-50 to-green-50 p-6 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg mb-6"
-                >
-                  <p className="text-gray-700 mb-4 text-lg">{post.content}</p>
-                  {post.imageUrl && (
-                    <img
-                      src={post.imageUrl}
-                      alt="Post image"
-                      className="w-full h-64 object-cover rounded-lg"
-                    />
-                  )}
-                  <div className="text-sm text-gray-500 mt-4">
-                    {new Date(post.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+          {profile ? (
+            <>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-600">
+                    {profile.name || 'Anonymous User'}
+                  </h1>
+                  <p className="text-gray-600">{profile.email}</p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{profile.followers.length}</div>
+                    <div className="text-gray-600">Followers</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{profile.following.length}</div>
+                    <div className="text-gray-600">Following</div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-gray-800">Your Posts</h2>
+                {posts?.map((post: Post) => (
+                  <div key={post.id} className="bg-gray-50 rounded-lg p-6">
+                    <p className="text-gray-800 mb-4">{post.content}</p>
+                    {post.imageUrl && (
+                      <div className="relative w-full h-64 mb-4 rounded-lg overflow-hidden">
+                        <Image
+                          src={post.imageUrl}
+                          alt="Post image"
+                          layout="fill"
+                          objectFit="cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm text-gray-500">
+                      <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                      <span>{post.comments.length} comments</span>
+                    </div>
+                  </div>
+                ))}
+                {(!posts || posts.length === 0) && (
+                  <p className="text-gray-500 text-center py-8">No posts yet</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">User not found</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
